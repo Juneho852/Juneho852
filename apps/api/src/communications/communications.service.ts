@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as twilio from 'twilio';
+import * as twilioLib from 'twilio';
 import { ProxySessionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EncryptionService } from '../common/encryption.service';
@@ -11,7 +11,7 @@ const CONTRACT_TTL_SECONDS = 2 * 365 * 24 * 60 * 60; // 2 years
 @Injectable()
 export class CommunicationsService {
   private readonly logger = new Logger(CommunicationsService.name);
-  private client: twilio.Twilio;
+  private client: any;
   private serviceSid: string;
 
   constructor(
@@ -19,7 +19,8 @@ export class CommunicationsService {
     private encryption: EncryptionService,
     private config: ConfigService,
   ) {
-    this.client = twilio.default(
+    const twilioFn = (twilioLib as any).default ?? twilioLib;
+    this.client = twilioFn(
       config.get('TWILIO_ACCOUNT_SID'),
       config.get('TWILIO_AUTH_TOKEN'),
     );

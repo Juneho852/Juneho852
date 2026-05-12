@@ -5,7 +5,6 @@ import {
   Headers,
   BadRequestException,
   Logger,
-  RawBody,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
@@ -29,14 +28,14 @@ export class WebhookController {
   @Public()
   @Post('stripe')
   async handleStripeWebhook(
-    @Req() req: Request,
+    @Req() req: Request & { rawBody?: Buffer },
     @Headers('stripe-signature') sig: string,
   ) {
     let event: Stripe.Event;
 
     try {
       event = this.stripe.webhooks.constructEvent(
-        req.rawBody,
+        (req as any).rawBody,
         sig,
         this.config.get('STRIPE_WEBHOOK_SECRET'),
       );

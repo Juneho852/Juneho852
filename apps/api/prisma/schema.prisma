@@ -1,0 +1,295 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EMPLOYER
+  HELPER
+  BROKER
+  ADMIN
+}
+
+enum JobStatus {
+  DRAFT
+  ACTIVE
+  MATCHED
+  INTERVIEW_SCHEDULED
+  OFFER_MADE
+  HIRED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FAILED
+}
+
+enum ContractStatus {
+  DRAFT
+  PENDING_SIGNATURE
+  ACTIVE
+  COMPLETED
+  TERMINATED
+  EXPIRED
+}
+
+enum ProxySessionStatus {
+  ACTIVE
+  EXPIRED
+  DELETED
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String
+  role              UserRole
+  isVerified        Boolean   @default(false)
+  isActive          Boolean   @default(true)
+  mfaEnabled        Boolean   @default(false)
+  mfaSecret         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  employer          Employer?
+  helper            Helper?
+  broker            Broker?
+  admin             Admin?
+  auditLogs         AuditLog[]
+}
+
+model Employer {
+  id                String    @id @default(cuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id])
+  fullName          String
+  phone             String?   // AES-256 encrypted
+  phoneIv           String?
+  companyName       String?
+  district          String?
+  stripeCustomerId  String?
+  searchCount       Int       @default(0)
+  searchLimit       Int       @default(10)
+  plan              String    @default("basic")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  jobs              Job[]
+  payments          Payment[]
+  proxySessions     ProxySession[]
+  matchResults      MatchResult[]
+}
+
+model Helper {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id])
+  fullName            String
+  phone               String    // AES-256 encrypted
+  phoneIv             String
+  nationality         String
+  dateOfBirth         DateTime?
+  yearsExperience     Int       @default(0)
+  languages           String[]
+  cookingTypes        String[]
+  hasPetCare          Boolean   @default(false)
+  hasDriving          Boolean   @default(false)
+  childrenExperience  Int       @default(0)
+  elderlyExperience   Int       @default(0)
+  mbtiType            String?
+  profilePhotoUrl     String?
+  documentUrls        String[]
+  isVetted            Boolean   @default(false)
+  aiVettingScore      Float?
+  aiMatchScore        Float?
+  isProfileVisible    Boolean   @default(false)
+  brokerId            String?
+  broker              Broker?   @relation(fields: [brokerId], references: [id])
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  jobApplications     JobApplication[]
+  proxySessions       ProxySession[]
+  matchResults        MatchResult[]
+}
+
+model Broker {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id])
+  agencyName            String
+  licenseNumber         String    @unique
+  phone                 String?   // AES-256 encrypted
+  phoneIv               String?
+  stripeAccountId       String?   // Stripe Connect Express account
+  stripeOnboardingDone  Boolean   @default(false)
+  payoutHoldDays        Int       @default(30)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  helpers               Helper[]
+  payments              Payment[]
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Job {
+  id                  String      @id @default(cuid())
+  employerId          String
+  employer            Employer    @relation(fields: [employerId], references: [id])
+  title               String
+  yearsExpNeeded      Int
+  numChildren         Int         @default(0)
+  numElderly          Int         @default(0)
+  languagesRequired   String[]
+  cookingRequired     String[]
+  needsPetCare        Boolean     @default(false)
+  needsDriving        Boolean     @default(false)
+  nationalityPref     String?
+  mbtiProfile         Json?
+  budgetMin           Int
+  budgetMax           Int
+  status              JobStatus   @default(DRAFT)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  applications        JobApplication[]
+  matchResults        MatchResult[]
+  payments            Payment[]
+}
+
+model JobApplication {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id])
+  helperId    String
+  helper      Helper   @relation(fields: [helperId], references: [id])
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+
+  @@unique([jobId, helperId])
+}
+
+model MatchResult {
+  id            String   @id @default(cuid())
+  employerId    String
+  employer      Employer @relation(fields: [employerId], references: [id])
+  jobId         String
+  job           Job      @relation(fields: [jobId], references: [id])
+  helperId      String
+  helper        Helper   @relation(fields: [helperId], references: [id])
+  score         Float
+  reasoning     String
+  skillsFit     Json
+  personalityFit Float
+  isWildcard    Boolean  @default(false)
+  rank          Int
+  cachedAt      DateTime @default(now())
+  expiresAt     DateTime
+
+  @@index([employerId, jobId])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  employerId            String
+  employer              Employer      @relation(fields: [employerId], references: [id])
+  brokerId              String?
+  broker                Broker?       @relation(fields: [brokerId], references: [id])
+  jobId                 String?
+  job                   Job?          @relation(fields: [jobId], references: [id])
+  stripePaymentIntentId String        @unique
+  stripeTransferId      String?
+  amount                Int           // in HKD cents
+  platformFee           Int
+  brokerAmount          Int
+  currency              String        @default("hkd")
+  status                PaymentStatus @default(PENDING)
+  capturedAt            DateTime?
+  transferredAt         DateTime?
+  hireConfirmedAt       DateTime?
+  refundedAmount        Int?
+  idempotencyKey        String        @unique
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  webhookEvents         WebhookEvent[]
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique  // Stripe event ID for idempotency
+  eventType   String
+  paymentId   String?
+  payment     Payment? @relation(fields: [paymentId], references: [id])
+  processed   Boolean  @default(false)
+  processedAt DateTime?
+  payload     Json
+  createdAt   DateTime @default(now())
+}
+
+model ProxySession {
+  id              String             @id @default(cuid())
+  employerId      String
+  employer        Employer           @relation(fields: [employerId], references: [id])
+  helperId        String
+  helper          Helper             @relation(fields: [helperId], references: [id])
+  twilioSessionSid String            @unique
+  proxyNumber     String             // +852 virtual number shown to employer
+  ttlSeconds      Int
+  status          ProxySessionStatus @default(ACTIVE)
+  expiresAt       DateTime
+  createdAt       DateTime           @default(now())
+  deletedAt       DateTime?
+
+  @@index([employerId, helperId])
+}
+
+model Contract {
+  id              String         @id @default(cuid())
+  employerId      String
+  helperId        String
+  brokerId        String?
+  jobId           String?
+  type            String         // "SSA" | "ID407" | "ESCROW_RELEASE"
+  status          ContractStatus @default(DRAFT)
+  docusignEnvelopeId String?
+  pdfUrl          String?
+  signedAt        DateTime?
+  startDate       DateTime?
+  endDate         DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  resource  String
+  resourceId String?
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}

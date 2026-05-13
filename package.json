@@ -1,0 +1,17 @@
+{
+  "name": "matchai",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"yarn workspace @matchai/api dev\" \"yarn workspace @matchai/web dev\"",
+    "build": "yarn workspace @matchai/api build && yarn workspace @matchai/web build",
+    "db:migrate": "yarn workspace @matchai/api prisma:migrate",
+    "db:studio": "yarn workspace @matchai/api prisma studio"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

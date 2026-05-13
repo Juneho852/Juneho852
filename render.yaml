@@ -2,8 +2,8 @@ services:
   - type: web
     name: matchai-api
     runtime: node
-    buildCommand: cd apps/api && npm install --include=dev && npx prisma generate && npm run build
-    startCommand: cd apps/api && npx prisma migrate deploy && node dist/main
+    buildCommand: cd apps/api && npm install --include=dev && npx prisma generate
+    startCommand: cd apps/api && npx prisma migrate deploy && npx ts-node -r tsconfig-paths/register src/main.ts
     envVars:
       - key: NODE_ENV
         value: production

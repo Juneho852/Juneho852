@@ -14,7 +14,10 @@ async function bootstrap() {
   app.use(helmet());
 
   app.enableCors({
-    origin: config.get('FRONTEND_URL', 'http://localhost:3000'),
+    origin: [
+      config.get('FRONTEND_URL', 'http://localhost:3000'),
+      /\.vercel\.app$/,
+    ],
     credentials: true,
   });
 
@@ -28,7 +31,7 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
-  const port = config.get<number>('API_PORT', 3001);
+  const port = process.env.PORT || config.get<number>('API_PORT', 3001);
   await app.listen(port);
   console.log(`MatchAI API running on port ${port}`);
 }

@@ -11,7 +11,8 @@ export class EncryptionService {
   private readonly key: Buffer;
 
   constructor(private config: ConfigService) {
-    const hexKey = config.get<string>('AES_ENCRYPTION_KEY');
+    const hexKey = config.get<string>('ENCRYPTION_KEY');
+    if (!hexKey) throw new Error('ENCRYPTION_KEY env var is not set');
     this.key = Buffer.from(hexKey, 'hex');
   }
 
@@ -23,7 +24,6 @@ export class EncryptionService {
       cipher.final(),
     ]);
     const authTag = cipher.getAuthTag();
-    // store authTag appended to ciphertext
     const combined = Buffer.concat([encrypted, authTag]);
     return {
       encrypted: combined.toString('base64'),

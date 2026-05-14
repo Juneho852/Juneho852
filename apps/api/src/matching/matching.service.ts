@@ -24,7 +24,9 @@ export class MatchingService {
     private redis: RedisService,
     private config: ConfigService,
   ) {
-    this.openai = new OpenAI({ apiKey: config.get('OPENAI_API_KEY') });
+    const apiKey = config.get('OPENAI_API_KEY');
+    if (apiKey) this.openai = new OpenAI({ apiKey });
+    else this.logger.warn('OPENAI_API_KEY not set — using rule-based fallback');
   }
 
   async runMatching(employerId: string, dto: RunMatchingDto) {
@@ -39,7 +41,6 @@ export class MatchingService {
 
     if (helpers.length === 0) return { results: [], total: 0 };
 
-    // Score all helpers concurrently in batches of 10
     const BATCH_SIZE = 10;
     const batches: typeof helpers[] = [];
     for (let i = 0; i < helpers.length; i += BATCH_SIZE) {
@@ -53,11 +54,9 @@ export class MatchingService {
     const allScores = batchResults.flat().sort((a, b) => b.score - a.score);
 
     const top10 = allScores.slice(0, 10);
-    // Mark 2-3 wildcards from lower ranks (interesting mismatches)
     const wildcards = allScores.slice(10, 13).map((s) => ({ ...s, isWildcard: true }));
     const finalResults = [...top10, ...wildcards];
 
-    // Persist to DB
     await this.prisma.matchResult.deleteMany({ where: { employerId, jobId: dto.jobId } });
     await this.prisma.matchResult.createMany({
       data: finalResults.map((r, idx) => ({
@@ -116,6 +115,7 @@ Return a JSON array with this exact structure for each helper:
 Only return the JSON array, no other text.`;
 
     try {
+      if (!this.openai) throw new Error('OpenAI not configured');
       const response = await this.openai.chat.completions.create({
         model: this.config.get('OPENAI_MODEL', 'gpt-4o'),
         messages: [{ role: 'user', content: prompt }],
@@ -129,7 +129,6 @@ Only return the JSON array, no other text.`;
       return scores.map((s: any) => ({ ...s, isWildcard: false }));
     } catch (err) {
       this.logger.error('OpenAI scoring error', err);
-      // Fallback: rule-based scoring
       return helpers.map((h) => ({
         helperId: h.id,
         score: this.ruleBasedScore(h, job),
@@ -164,7 +163,6 @@ Only return the JSON array, no other text.`;
             languages: true,
             profilePhotoUrl: true,
             mbtiType: true,
-            // Never include phone field
           },
         },
       },
